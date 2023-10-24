@@ -15,7 +15,7 @@ uniform float duration;//
 uniform float envStart;//
 uniform bool interpolate;//
 uniform bool glow;//
-uniform float nebulaAmp;
+uniform float nebulaAmp;//
 
 uniform float fade;//
 uniform float fdAlpha;//
@@ -34,9 +34,9 @@ uniform float focalDistance;//
 uniform float aperture;//
 uniform float maxParticleSize;//
 
-uniform vec3 tint;
-uniform vec3 hoverPoint;
-uniform float hover;
+uniform vec3 tint;//
+uniform vec3 hoverPoint;//
+uniform float hover;//
 
 varying float vRing;
 varying float vLevels;
@@ -187,9 +187,9 @@ const vec3 color3 = vec3(0.51, 0.17, 0.75);
 
 const float hoverOpacity = .35;
 
-uniform vec4 interaction;
+uniform vec4 interaction;//
 uniform vec3 planets[3];
-uniform float iRadius;
+uniform float iRadius;//
 
 // 1000?
 // jitter?

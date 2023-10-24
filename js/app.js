@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { FlyControls } from "three/examples/jsm/controls/FlyControls.js";
 // import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";
 
@@ -47,6 +48,7 @@ export default class Sketch {
     // this.camera = new THREE.OrthographicCamera( frustumSize * aspect / - 2, frustumSize * aspect / 2, frustumSize / 2, frustumSize / - 2, -1000, 1000 );
     this.camera.position.set(0, 250, 325);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+
     this.time = 0;
 
     this.raycaster = new THREE.Raycaster();
@@ -109,9 +111,10 @@ export default class Sketch {
     let that = this;
     let preset = {};
     this.settings = {
-      progress: 0, //fade
+      fade: 0, //fade
+      fdAlpha: 0, //fdAlpha
       glow: false, //glow 亮度
-      fdAlpha: 1, //superOpacity 透明度
+      nebulaAmp: 5, //nebulaAmp
       superScale: 1, //superScale 仅当glow开启时有效
       envStart: 1.25, //envStart 开始时间
       duration: 10, // duration 持续时间
@@ -127,6 +130,9 @@ export default class Sketch {
       hover: 0,
       interaction: new THREE.Vector4(0, 0, 0, 0),
       iRadius: 11,
+      //fragment
+      globalAlpha: 1,
+      superOpacity: 1, //superOpacity 透明度
 
       savePreset() {
         // save current values to an object
@@ -156,23 +162,24 @@ export default class Sketch {
 
     this.gui = new GUI();
     const guiInstance = this.gui;
+    let vertex = this.gui.addFolder("vertex");
+    vertex.add(this.settings, "fade", 0, 1, 0.01);
+    vertex.add(this.settings, "fdAlpha", 0, 1, 0.01);
+    vertex.add(this.settings, "superScale", 0, 3, 0.01);
+    vertex.add(this.settings, "glow");
+    vertex.add(this.settings, "nebulaAmp", 0, 1000, 0.01);
+    vertex.add(this, "time", -5, 5, 0.1);
+    vertex.add(this.settings, "envStart", 0, 2, 0.1);
+    vertex.add(this.settings, "duration", 0, 100, 0.1);
+    vertex.add(this.settings, "interpolate");
+    vertex.add(this.settings, "scale");
+    vertex.add(this.settings, "size");
+    vertex.add(this.settings, "nebula");
+    vertex.add(this.settings, "focalDistance", 0, 10000, 0.1);
+    vertex.add(this.settings, "aperture", 0, 10000, 0.1);
+    vertex.add(this.settings, "maxParticleSize", 0, 100, 1);
 
-    this.gui.add(this.settings, "progress", 0, 1, 0.01);
-    this.gui.add(this.settings, "fdAlpha", 0, 1, 0.01);
-    this.gui.add(this.settings, "superScale", 0, 3, 0.01);
-    this.gui.add(this.settings, "glow");
-    this.gui.add(this, "time", -5, 5, 0.1);
-    this.gui.add(this.settings, "envStart", 0, 2, 0.1);
-    this.gui.add(this.settings, "duration", 0, 100, 0.1);
-    this.gui.add(this.settings, "interpolate");
-    this.gui.add(this.settings, "scale");
-    this.gui.add(this.settings, "size");
-    this.gui.add(this.settings, "nebula");
-    this.gui.add(this.settings, "focalDistance", 0, 2000, 1);
-    this.gui.add(this.settings, "aperture", 0, 1000, 1);
-    this.gui.add(this.settings, "maxParticleSize", 0, 100, 1);
-
-    let folderHP = this.gui.addFolder("hoverPoint");
+    let folderHP = vertex.addFolder("hoverPoint");
     folderHP.addColor(this.settings, "tint", 255);
     folderHP.add(this.settings.hoverPoint, "x", -1000, 1000, 1);
     folderHP.add(this.settings.hoverPoint, "y", -1000, 1000, 1);
@@ -185,6 +192,10 @@ export default class Sketch {
     // folderI.add(this.settings.interaction, "z", -100, 100, 1);
     // folderI.add(this.settings.interaction, "w", 0, 1, 0.01);
     folderI.add(this.settings, "iRadius", 0, 40, 1);
+
+    let fragment = this.gui.addFolder("fragment");
+    fragment.add(this.settings, "globalAlpha", 0, 1, 0.01);
+    fragment.add(this.settings, "superOpacity", 0, 1, 0.01);
 
     this.gui.add(this.settings, "savePreset");
     const loadButton = this.gui.add(this.settings, "loadPreset");
@@ -420,7 +431,7 @@ export default class Sketch {
     this.material.uniforms.envStart.value = this.settings.envStart;
     this.material.uniforms.duration.value = this.settings.duration;
     this.material.uniforms.interpolate.value = this.settings.interpolate;
-    this.material.uniforms.superOpacity.value = this.settings.fdAlpha;
+    this.material.uniforms.superOpacity.value = this.settings.superOpacity;
     this.material.uniforms.superScale.value = this.settings.superScale;
     this.material.uniforms.scale.value = this.settings.scale;
     this.material.uniforms.size.value = this.settings.size;
@@ -435,6 +446,10 @@ export default class Sketch {
     this.material.uniforms.hover.value = this.settings.hover;
     // this.material.uniforms.interaction.value = this.settings.interaction;
     this.material.uniforms.iRadius.value = this.settings.iRadius;
+    this.material.uniforms.nebulaAmp.value = this.settings.nebulaAmp;
+
+    // fragment
+    this.material.uniforms.globalAlpha.value = this.settings.globalAlpha;
 
     // this.renderer.setRenderTarget(this.glow);
     this.renderer.render(this.scene, this.camera);
@@ -446,11 +461,11 @@ export default class Sketch {
     // this.renderer.setClearColor(0x000000, 0);
     this.material.uniforms.tint.value = this.settings.tint;
     // this.time = this.time%1;
-    this.material.uniforms.fade.value = this.settings.progress;
+    this.material.uniforms.fade.value = this.settings.fade;
     this.material.uniforms.glow.value = this.settings.glow;
     this.material.uniforms.time.value = this.time;
 
-    // this.material.uniforms.fdAlpha.value = this.settings.fdAlpha;
+    this.material.uniforms.fdAlpha.value = this.settings.fdAlpha;
     // this.material.uniforms.superOpacity.value = 1;
     // this.material.uniforms.duration.value = this.settings.duration;
 
