@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { FlyControls } from "three/examples/jsm/controls/FlyControls.js";
 // import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";
 
@@ -14,6 +13,8 @@ import scaleTexture from "../scale-texture.png";
 import anitiles from "../ani-tiles.exr";
 const random = require("canvas-sketch-util/random");
 const createInputEvents = require("simple-input-events");
+
+import { init } from "./effect";
 
 export default class Sketch {
   constructor(options) {
@@ -43,14 +44,15 @@ export default class Sketch {
       4000
     );
 
+    this.composer= init(this.renderer, this.scene, this.camera);
+
     // var frustumSize = 10;
     // var aspect = window.innerWidth / window.innerHeight;
     // this.camera = new THREE.OrthographicCamera( frustumSize * aspect / - 2, frustumSize * aspect / 2, frustumSize / 2, frustumSize / - 2, -1000, 1000 );
     this.camera.position.set(0, 250, 325);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-
-    this.time = 0;
-
+    this.time = 9;
+this.camera.updateProjectionMatrix
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
 
@@ -71,6 +73,7 @@ export default class Sketch {
       new THREE.SphereBufferGeometry(10, 32, 32),
       new THREE.MeshBasicMaterial({ color: 0x000000 })
     );
+    console.log(this.ball.geometry);
     this.scene.add(this.ball);
 
     let testmesh = new THREE.Mesh(
@@ -95,7 +98,7 @@ export default class Sketch {
 
       const intersects = this.raycaster.intersectObjects([testmesh]);
 
-      // console.log(intersects[0]);
+      //console.log(intersects[0]);
       if (intersects[0]) {
         let p = intersects[0].point;
         this.material.uniforms.interaction.value.x = p.x;
@@ -133,6 +136,9 @@ export default class Sketch {
       //fragment
       globalAlpha: 1,
       superOpacity: 1, //superOpacity 透明度
+      planets: true,
+      mousePlanet: true,
+      planetsNum: 8,
 
       savePreset() {
         // save current values to an object
@@ -162,6 +168,7 @@ export default class Sketch {
 
     this.gui = new GUI();
     const guiInstance = this.gui;
+    guiInstance.close();
     let vertex = this.gui.addFolder("vertex");
     vertex.add(this.settings, "fade", 0, 1, 0.01);
     vertex.add(this.settings, "fdAlpha", 0, 1, 0.01);
@@ -196,6 +203,11 @@ export default class Sketch {
     let fragment = this.gui.addFolder("fragment");
     fragment.add(this.settings, "globalAlpha", 0, 1, 0.01);
     fragment.add(this.settings, "superOpacity", 0, 1, 0.01);
+
+    let planet = this.gui.addFolder("planet");
+    planet.add(this.settings, "planets");
+    planet.add(this.settings, "mousePlanet");
+    planet.add(this.settings, "planetsNum");
 
     this.gui.add(this.settings, "savePreset");
     const loadButton = this.gui.add(this.settings, "loadPreset");
@@ -234,9 +246,11 @@ export default class Sketch {
 
     this.planets = [];
     this.planetsMeshes = [];
-    for (let i = 0; i < 3; i++) {
-      let x = 100 * Math.sin((Math.PI * 2 * i) / 3);
-      let y = 100 * Math.cos((Math.PI * 2 * i) / 3);
+    this.maxPlanetsNum = 8;
+    this.planetsNum = 8;
+    for (let i = 0; i < this.maxPlanetsNum; i++) {
+      let x = 100 * Math.sin((Math.PI * 2 * i) / this.maxPlanetsNum);
+      let y = 100 * Math.cos((Math.PI * 2 * i) / this.maxPlanetsNum);
       let z = 0;
       this.planets.push(new THREE.Vector3(x, z, y));
       let planet = new THREE.Mesh(
@@ -334,8 +348,17 @@ export default class Sketch {
         nebulaAmp: {
           value: 5,
         },
+        planetsOn: {
+          value: true,
+        },
+        mousePlanetOn: {
+          value: true,
+        },
+        planetsNum: {
+          value: this.maxPlanetsNum,
+        }
       },
-      wireframe: false,
+      // wireframe: true,
       transparent: true,
       vertexShader: vertex,
       fragmentShader: fragment,
@@ -344,7 +367,7 @@ export default class Sketch {
     });
 
     new EXRLoader().load(anitiles, (texture) => {
-      console.log(texture, "texture");
+      //console.log(texture, "texture");
       texture.generateMipmaps = false;
       texture.minFilter = THREE.NearestFilter;
       texture.magFilter = THREE.NearestFilter;
@@ -401,7 +424,7 @@ export default class Sketch {
     this.scene.add(this.mesh);
     this.mesh.rotation.x = Math.PI / 2;
 
-    console.log(this.mesh);
+    //console.log(this.mesh);
 
     let test = new THREE.Mesh(
       new THREE.BoxBufferGeometry(10, 10, 10),
@@ -451,6 +474,12 @@ export default class Sketch {
     // fragment
     this.material.uniforms.globalAlpha.value = this.settings.globalAlpha;
 
+    // planet
+    this.material.uniforms.planetsOn.value = this.settings.planets;
+    this.material.uniforms.mousePlanetOn.value = this.settings.mousePlanet;
+    this.material.uniforms.planetsNum.value = this.settings.planetsNum;
+    this.planetsNum = this.settings.planetsNum < this.maxPlanetsNum ? this.settings.planetsNum : this.maxPlanetsNum;
+
     // this.renderer.setRenderTarget(this.glow);
     this.renderer.render(this.scene, this.camera);
     // this.renderer.setRenderTarget(null);
@@ -471,14 +500,21 @@ export default class Sketch {
 
     requestAnimationFrame(this.render.bind(this));
     this.renderer.render(this.scene, this.camera);
-
-    for (let i = 0; i < 3; i++) {
-      let x = 100 * Math.sin((Math.PI * 2 * i) / 3 + this.time / 10);
-      let y = 100 * Math.cos((Math.PI * 2 * i) / 3 + this.time / 10);
-      let z = 0;
-      this.planets[i] = new THREE.Vector3(x, z, y);
-      this.planetsMeshes[i].position.set(x, z, y);
+    this.composer.render();
+    for (let i = 0; i < this.maxPlanetsNum; i++) {
+      if (i < this.planetsNum) {
+        let x = 100 * Math.sin((Math.PI * 2 * i) / this.planetsNum + this.time / 10);
+        let y = 100 * Math.cos((Math.PI * 2 * i) / this.planetsNum + this.time / 10);
+        let z = 0;
+        this.planets[i] = new THREE.Vector3(x, z, y);
+        this.planetsMeshes[i].position.set(x, z, y);
+        this.planetsMeshes[i].visible = this.settings.planets;
+      }
+      else {
+        this.planetsMeshes[i].visible = false;
+      }
     }
+    this.ball.visible = this.settings.mousePlanet;
   }
 }
 
